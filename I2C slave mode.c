@@ -25,24 +25,24 @@
 #include <pic.h>
 #include <stdint.h>             //define uint_8
 #define _XTAL_FREQ 310000UL     //maybe 500kHz
-int a1=0;                       //useless
-int a2=0;                       //useless
-int a3=0;                       //useless
-int a4=0;                       //useless
-int a5=0x00;                       //useless
-int a6=0x02;                       //useless
-int a7=0x03;                       //useless
-int a8=0x04;                       //useless
+int a1=0;
+int a2=0;
+int a3=0;
+int a4=0;
+int a5=0x00;
+int a6=0x02;
+int a7=0x03;
+int a8=0x04;
 unsigned char rd_data[10] = 0;
-unsigned char wt_data[10] = 0;                       //useless
-static unsigned char i = 0;
+unsigned char wt_data[10] = 0;
+int i = 0;
 unsigned char dummy;
 
 void main()
 {
     /**************************************************************************/
     
-    //IO initialize    only need to pay attention to the SCL and SDA pin
+    //IO initializehhhhv
     TRISAbits.TRISA5=0;   //A5 output
     TRISAbits.TRISA4=0;   //A4 output
     TRISCbits.TRISC3=1;   //C3 input
@@ -65,7 +65,7 @@ void main()
     SSPBUF=0x00;
     SSPCON=0x36;
     SSPCON2=0x81;
-    SSPCON3=0x00; 
+    SSPCON3=0x00; //change form 0xf0
     SSPSTAT=0x00;
     SSPADD=0xA0;
     SSPCONbits.SSPM3=0;
@@ -86,7 +86,7 @@ void main()
     /**************************************************************************/
     
     //i2c part start form here
-    while(1)
+    while(i <= 3)
     {
         if ((1 == SSPSTATbits.S)&&(0 == SSPSTATbits.D_nA)&&(0 == SSPSTATbits.R_nW)&&(1 == SSPSTATbits.BF))          //MASTER ADD WRITE
         {
@@ -94,7 +94,7 @@ void main()
             SSP1IF = 0;
             dummy = SSPBUF;
             while(0 == BF)
-            CKP = 1;
+            CKP = 1;                                                                //write address
             i = 0;
         }
     
@@ -109,7 +109,7 @@ void main()
             CKP = 1; 
         }
     
-        else if ((1==SSPSTATbits.S)&&(0==SSPSTATbits.D_nA)&&(1==SSPSTATbits.R_nW))
+        else if ((1==SSPSTATbits.S)&&(0==SSPSTATbits.D_nA)&&(1==SSPSTATbits.R_nW))                                // MASTER ADDRESS READ
         {
             SSPBUF = rd_data [i];
             SSPCON1bits.CKP = 1;
@@ -119,7 +119,7 @@ void main()
             i++;
         }
     
-        else if ((1 == SSPSTATbits.S)&&(1 == SSPSTATbits.D_nA)&&(1 == SSPSTATbits.R_nW))
+        else if ((1 == SSPSTATbits.S)&&(1 == SSPSTATbits.D_nA)&&(1 == SSPSTATbits.R_nW))                         // MASTER DATA READ
         {
             SSPBUF = rd_data [i];
             SSPCON1bits.CKP = 1;
@@ -138,6 +138,7 @@ void main()
 	    {
 	    	;								// Error case
 	    }
+    }
     //i2c part end
     
     /**************************************************************************/
@@ -225,34 +226,99 @@ void main()
      *                                                                        *
 
     ***************************************************************************/
-    /*
-    //Data judgment part start form here             (sitll working on it)
-        if(0x11 == rd_data [1])
+    
+    //Data judgment part start form here
+    while(i == 4)
+    {
+        //sentence test start
+        if(0x00 == rd_data [0] && 0x01 == rd_data [1] && 0x01 == rd_data [2] && 0x01 == rd_data [3])          
         {
             LATAbits.LATA5=0;
             LATAbits.LATA4=0;
             __delay_ms(2000);
-            LATAbits.LATA5=1;  //red
+            LATAbits.LATA5=1;  
             LATAbits.LATA4=0;
-            __delay_ms(2000);
-            LATAbits.LATA5=0;  //green
-            LATAbits.LATA4=1;
-            __delay_ms(2000);
+            __delay_ms(2000);          //only red
+            i = 0;
+        }
+        else if(0x00 == rd_data [0] && 0x02 == rd_data [1] && 0x02 == rd_data [2] && 0x02 == rd_data [3])
+        {
             LATAbits.LATA5=0;
             LATAbits.LATA4=0;
+            __delay_ms(2000);
+            LATAbits.LATA5=0;  
+            LATAbits.LATA4=1;
+            __delay_ms(2000);          //only green
+            i = 0;
         }
-        else if(0x22 == rd_data [1])
+        else if(0x00 == rd_data [0] && 0x03 == rd_data [1] && 0x03 == rd_data [2] && 0x03 == rd_data [3])
         {
             LATAbits.LATA5=0;
             LATAbits.LATA4=0;
             __delay_ms(2000);
             LATAbits.LATA5=1;
             LATAbits.LATA4=1; 
-            __delay_ms(2000);
-            LATAbits.LATA5=0;
+            __delay_ms(2000);          //both green and red
+            i =0;
+        }
+        else
+        {
+            i=0;
+        }
+        //sentence test end
+        /*
+        if(0x01 == rd_data [0] && 0x01 == rd_data [1] && 0x01 == rd_data [2] && 0x01 == rd_data [3] && PORTCbits.RC5==0)  //locked
+       {
+            if(PORTCbits.RC3==0)               //release now
+            {
+                LATAbits.LATA4=0;
+                LATAbits.LATA5=0; 
+                LATAbits.LATA2=1;
+                LATCbits.LATC2=0;
+                __delay_ms(9500);
+            }
+            else
+           {
             LATAbits.LATA4=0;
-        }*/
-    //Data judgment part end
+            LATAbits.LATA5=1;
+            LATAbits.LATA2=0;
+            LATCbits.LATC2=0;
+           }
+         }
+        if(0x02 == rd_data [0] && 0x02 == rd_data [1] && 0x02 == rd_data [2] && 0x02 == rd_data [3] && PORTCbits.RC4==0)  //released
+        {
+            if(PORTCbits.RC3==0)          //lock now
+            {
+            LATAbits.LATA4=0;
+            LATAbits.LATA5=0;
+            LATAbits.LATA2=0;
+            LATCbits.LATC2=1;
+            __delay_ms(9500);
+            }
+            else
+            {
+            LATAbits.LATA4=1;
+            LATAbits.LATA5=0; 
+            LATAbits.LATA2=0;
+            LATCbits.LATC2=0;
+            }
+        }
+        if(0x03 == rd_data [0] && 0x03 == rd_data [1] && 0x03 == rd_data [2] && 0x03 == rd_data [3])  //checking
+        {
+            if(PORTCbits.RC5==0)        //locked
+            {
+                ;
+            }
+            else if(PORTCbits.RC4==0)        //released
+            {
+                ;
+            }
+            else          //moving
+            {
+                ;
+            }
+        }
+        */
     }
-    
+        //Data judgment part end
 }
