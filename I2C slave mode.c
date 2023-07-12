@@ -25,16 +25,7 @@
 #include <pic.h>
 #include <stdint.h>             //define uint_8
 #define _XTAL_FREQ 310000UL     //maybe 500kHz
-int a1=0;
-int a2=0;
-int a3=0;
-int a4=0;
-int a5=0x00;
-int a6=0x02;
-int a7=0x03;
-int a8=0x04;
-unsigned char rd_data[10] = 0;
-unsigned char wt_data[10] = 0;
+unsigned char rd_data[2] = 0;
 int i = 0;
 unsigned char dummy;
 
@@ -42,7 +33,7 @@ void main()
 {
     /**************************************************************************/
     
-    //IO initializehhhhv
+    //IO initialize
     TRISAbits.TRISA5=0;   //A5 output
     TRISAbits.TRISA4=0;   //A4 output
     TRISCbits.TRISC3=1;   //C3 input
@@ -63,180 +54,214 @@ void main()
     
     //i2c initialize
     SSPBUF=0x00;
-    SSPCON=0x36;
+    SSPCON=0x36;////36!!
     SSPCON2=0x81;
-    SSPCON3=0x00; //change form 0xf0
+    SSPCON3=0x00; //change form 0xf0 change form 0xf7
     SSPSTAT=0x00;
-    SSPADD=0xA0;
+    SSPADD=0x52;
     SSPCONbits.SSPM3=0;
     SSPCONbits.SSPM2=1;
-    SSPCONbits.SSPM1=1;
+    SSPCONbits.SSPM1=1; 
     SSPCONbits.SSPM0=0;
     SSP1IF=0;
+    i = 0;
     
     LATAbits.LATA5=0;
     LATAbits.LATA4=1;
-    __delay_ms(1000);
+    //__delay_ms(1000);
     LATAbits.LATA5=1;
     LATAbits.LATA4=0;
-    __delay_ms(1000);
+    //__delay_ms(1000);
     LATAbits.LATA5=0;
     LATAbits.LATA4=0;
-    
+    LATAbits.LATA2=0;
+    LATCbits.LATC2=0;
     /**************************************************************************/
     
     //i2c part start form here
-    while(i <= 3)
+    while(i < 1)
     {
-        if ((1 == SSPSTATbits.S)&&(0 == SSPSTATbits.D_nA)&&(0 == SSPSTATbits.R_nW)&&(1 == SSPSTATbits.BF))          //MASTER ADD WRITE
+         if ((SSPSTATbits.S == 1) && (SSPSTATbits.D_nA == 0) && (SSPSTATbits.R_nW == 0) && (SSPSTATbits.BF == 1))          //MASTER ADD WRITE
         {
-            while(1 == SSP1IF)
+            while(SSP1IF==1)
             SSP1IF = 0;
             dummy = SSPBUF;
-            while(0 == BF)
+            while(BF==0)
             CKP = 1;                                                                //write address
             i = 0;
         }
     
-        else if ((1 == SSPSTATbits.S)&&(1 == SSPSTATbits.D_nA)&&(0 == SSPSTATbits.R_nW)&&(1 == SSPSTATbits.BF))    // MASTER DATA WRITE
+        else if ((SSPSTATbits.S == 1) && (SSPSTATbits.D_nA == 1) && (SSPSTATbits.R_nW == 0) && (SSPSTATbits.BF == 1))    // MASTER DATA WRITE
         {
-            ACKDT = 0;
-            while(1 == SSP1IF)
+            while(SSP1IF==1)
             SSP1IF = 0;
-            rd_data [i] = SSPBUF;
-            i++;
-            while(0 == BF)
-            CKP = 1; 
+            rd_data[i] = SSPBUF;
+            if(rd_data[0]==0x52||rd_data[0]==0x18)
+            {
+                i++;
+                while(BF==0)
+                CKP = 1;
+            }
+            else if(rd_data[0]==0x8E)    //read reinitialize
+            {
+                SSPCON=0x36;//DO NOT TOUCH THIS LINE
+                SSP1IF=0;
+                i = 0;
+            }
+            else
+            {
+                i = 0;
+                while(BF==0)
+                CKP = 1;
+            }
         }
     
-        else if ((1==SSPSTATbits.S)&&(0==SSPSTATbits.D_nA)&&(1==SSPSTATbits.R_nW))                                // MASTER ADDRESS READ
+        else if ((1 == SSPSTATbits.S) && (0 == SSPSTATbits.D_nA) && (1 == SSPSTATbits.R_nW) && (SSPSTATbits.BF == 1))        // MASTER ADDRESS READ
         {
-            SSPBUF = rd_data [i];
-            SSPCON1bits.CKP = 1;
-            __delay_ms(100);
-            while(1 == SSP1IF)
-            SSP1IF=0;
-            i++;
+            if(PORTCbits.RC5==0 && PORTCbits.RC4==1)       //locking
+            {
+                while(SSP1IF == 1)
+                SSP1IF = 0;
+                while(BF == 1)
+                dummy = SSPBUF;
+                //while(BF == 0)
+                SSPBUF = 0x89;
+                SSPCON1bits.CKP = 1;
+                
+                i = 0;
+                LATAbits.LATA5=1;
+                LATAbits.LATA4=1;
+                __delay_ms(1000);
+                break;
+            }
+            else if(PORTCbits.RC4 == 0 && PORTCbits.RC5 == 1/* && SSPSTATbits.BF == 0*/)   //releasing
+            {
+                while(1 == SSP1IF)
+                SSP1IF = 0;
+                while(BF == 1)
+                dummy = SSPBUF;
+                //while(BF == 0)
+                SSPBUF = 0x8A;
+                SSPCON1bits.CKP = 1;
+                
+                i = 0;
+                LATAbits.LATA5=1;
+                LATAbits.LATA4=1;
+                __delay_ms(1000);
+                break;
+            }
+            else if(PORTCbits.RC4==1 && PORTCbits.RC4==1)   //not releasing nor locking
+            {
+                while(1 == SSP1IF)
+                SSP1IF = 0;
+                while(1 == BF)
+                dummy = SSPBUF;
+                //while(BF == 0)
+                SSPBUF = 0x8B;
+                SSPCON1bits.CKP = 1;
+
+                i = 0;
+                LATAbits.LATA5=1;
+                LATAbits.LATA4=1;
+                __delay_ms(1000);
+                break;
+            }
+            else                                //error case
+            {
+                i = 0;
+                break;
+            }
         }
-    
-        else if ((1 == SSPSTATbits.S)&&(1 == SSPSTATbits.D_nA)&&(1 == SSPSTATbits.R_nW))                         // MASTER DATA READ
-        {
-            SSPBUF = rd_data [i];
-            SSPCON1bits.CKP = 1;
-            __delay_ms(100);
-            while(1 == SSP1IF)
-            SSP1IF=0;
-            i++;
-        }
-    
-        else if ((1 == SSPSTATbits.S)&&(1 == SSPSTATbits.D_nA)&&(0 == SSPSTATbits.R_nW)&&(0 == SSPSTATbits.BF)) 
-        {
-            ;
-        }
-    
-        else
-	    {
-	    	;								// Error case
-	    }
     }
     //i2c part end
-    
-    /**************************************************************************/
 
-    /**************************************************************************/
-    
     //Data judgment part start form here
-    while(i == 4)
+    while(i == 1)
     {
-        //sentence test start
-        if(0x00 == rd_data [0] && 0x01 == rd_data [1] && 0x01 == rd_data [2] && 0x01 == rd_data [3])          
+        if(PORTCbits.RC5 == 0 && PORTCbits.RC4 == 1)    //locked
         {
-            LATAbits.LATA5=0;
-            LATAbits.LATA4=0;
-            __delay_ms(2000);
-            LATAbits.LATA5=1;  
-            LATAbits.LATA4=0;
-            __delay_ms(2000);          //only red
-            i = 0;
+            if(0x52 == rd_data[0]/* && 0xAD == rd_data[1]*/)          //release
+            {
+                while(PORTCbits.RC4 != 0)
+                {
+                    LATAbits.LATA2=1;
+                    LATCbits.LATC2=0;
+                    LATAbits.LATA5=1;
+                    LATAbits.LATA4=1;
+                }
+                LATAbits.LATA2=0;
+                LATCbits.LATC2=0;
+                i = 0;
+                rd_data[0] = 0;
+                rd_data[1] = 0;
+                rd_data[2] = 0;
+                break;
+            }
+            else
+            {
+                i = 0;
+                rd_data[0] = 0;
+                rd_data[1] = 0;
+                rd_data[2] = 0;
+                LATAbits.LATA5=1;
+                LATAbits.LATA4=1;
+                __delay_ms(250);
+                LATAbits.LATA5=0;
+                LATAbits.LATA4=1;
+                __delay_ms(250);
+                LATAbits.LATA5=1;
+                LATAbits.LATA4=0;
+                __delay_ms(250);
+                LATAbits.LATA5=1;
+                LATAbits.LATA4=0;
+                __delay_ms(250);
+                break;
+            }
         }
-        else if(0x00 == rd_data [0] && 0x02 == rd_data [1] && 0x02 == rd_data [2] && 0x02 == rd_data [3])
+        if(PORTCbits.RC4 == 0 && PORTCbits.RC5 == 1)   //released
         {
-            LATAbits.LATA5=0;
-            LATAbits.LATA4=0;
-            __delay_ms(2000);
-            LATAbits.LATA5=0;  
-            LATAbits.LATA4=1;
-            __delay_ms(2000);          //only green
-            i = 0;
-        }
-        else if(0x00 == rd_data [0] && 0x03 == rd_data [1] && 0x03 == rd_data [2] && 0x03 == rd_data [3])
-        {
-            LATAbits.LATA5=0;
-            LATAbits.LATA4=0;
-            __delay_ms(2000);
-            LATAbits.LATA5=1;
-            LATAbits.LATA4=1; 
-            __delay_ms(2000);          //both green and red
-            i =0;
+            if(rd_data[0] == 0x18/* && rd_data[1] == 0xe7*/)    //lock
+            {
+                while(PORTCbits.RC5 != 0)
+                {
+                    LATAbits.LATA2=0;
+                    LATCbits.LATC2=1;
+                    LATAbits.LATA5=1;
+                    LATAbits.LATA4=1;
+                    __delay_ms(10000);//10000
+                }
+                i = 0;
+                rd_data[0] = 0;
+                rd_data[1] = 0;
+                rd_data[2] = 0;
+                break;
+            }
+            else
+            {
+                i = 0;
+                LATAbits.LATA5=1;
+                LATAbits.LATA4=1;
+                __delay_ms(250);
+                LATAbits.LATA5=0;
+                LATAbits.LATA4=1;
+                __delay_ms(250);
+                LATAbits.LATA5=1;
+                LATAbits.LATA4=0;
+                __delay_ms(250);
+                LATAbits.LATA5=1;
+                LATAbits.LATA4=0;
+                __delay_ms(250);
+                rd_data[0] = 0;
+                rd_data[1] = 0;
+                rd_data[2] = 0;
+                break;
+            }
         }
         else
         {
             i=0;
+            break;
         }
-        //sentence test end
-        /*
-        if(0x01 == rd_data [0] && 0x01 == rd_data [1] && 0x01 == rd_data [2] && 0x01 == rd_data [3] && PORTCbits.RC5==0)  //locked
-       {
-            if(PORTCbits.RC3==0)               //release now
-            {
-                LATAbits.LATA4=0;
-                LATAbits.LATA5=0; 
-                LATAbits.LATA2=1;
-                LATCbits.LATC2=0;
-                __delay_ms(9500);
-            }
-            else
-           {
-            LATAbits.LATA4=0;
-            LATAbits.LATA5=1;
-            LATAbits.LATA2=0;
-            LATCbits.LATC2=0;
-           }
-         }
-        if(0x02 == rd_data [0] && 0x02 == rd_data [1] && 0x02 == rd_data [2] && 0x02 == rd_data [3] && PORTCbits.RC4==0)  //released
-        {
-            if(PORTCbits.RC3==0)          //lock now
-            {
-            LATAbits.LATA4=0;
-            LATAbits.LATA5=0;
-            LATAbits.LATA2=0;
-            LATCbits.LATC2=1;
-            __delay_ms(9500);
-            }
-            else
-            {
-            LATAbits.LATA4=1;
-            LATAbits.LATA5=0; 
-            LATAbits.LATA2=0;
-            LATCbits.LATC2=0;
-            }
-        }
-        if(0x03 == rd_data [0] && 0x03 == rd_data [1] && 0x03 == rd_data [2] && 0x03 == rd_data [3])  //checking
-        {
-            if(PORTCbits.RC5==0)        //locked
-            {
-                ;
-            }
-            else if(PORTCbits.RC4==0)        //released
-            {
-                ;
-            }
-            else          //moving
-            {
-                ;
-            }
-        }
-        */
     }
-        //Data judgment part end
+    //Data judgment part end
 }
